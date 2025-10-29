@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app_lock/flutter_app_lock.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_screen_lock/flutter_screen_lock.dart';
 import 'package:local_auth/local_auth.dart';
-import 'pin_screen.dart';
+import 'package:local_auth_android/local_auth_android.dart';
 
 class LockScreen extends StatefulWidget {
   const LockScreen({super.key});
@@ -10,152 +12,94 @@ class LockScreen extends StatefulWidget {
   State<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
-  final LocalAuthentication _auth = LocalAuthentication();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-
-  bool _isBiometricAvailable = false;
+class _LockScreenState extends State<LockScreen> {
+  final _storage = const FlutterSecureStorage();
+  final _localAuth = LocalAuthentication();
+  String? _savedPin;
   bool _fingerprintEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _checkBiometricAvailability();
+    _loadSettings();
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
+  Future<void> _loadSettings() async {
+    _savedPin = await _storage.read(key: 'user_pin');
+    _fingerprintEnabled =
+        (await _storage.read(key: 'use_fingerprint')) == 'true';
+    setState(() {});
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.resumed) {
-      _lockOnResume();
-    }
-  }
-
-  Future<void> _lockOnResume() async {
-    String? pinSet = await _secureStorage.read(key: 'pin_set');
-    if (pinSet == 'true' && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const PinScreen(isFirstTime: false)),
-      );
-    }
-  }
-
-  Future<void> _checkBiometricAvailability() async {
-    bool canCheck = await _auth.canCheckBiometrics;
-    bool isDeviceSupported = await _auth.isDeviceSupported();
-    String? storedFingerprint = await _secureStorage.read(
-      key: 'fingerprint_enabled',
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _isBiometricAvailable = canCheck && isDeviceSupported;
-      _fingerprintEnabled = storedFingerprint == 'true';
-    });
-  }
-
-  Future<void> _authenticateFingerprint() async {
+  Future<bool> _authenticateWithBiometrics() async {
     try {
-      bool authenticated = await _auth.authenticate(
-        localizedReason: 'Scan your fingerprint to unlock',
-        biometricOnly: true,
+      final canAuthenticate = await _localAuth.canCheckBiometrics;
+      if (!canAuthenticate) return false;
+
+      return await _localAuth.authenticate(
+        localizedReason: 'Authenticate to unlock your app',
+        authMessages: const [
+          AndroidAuthMessages(
+            signInTitle: 'Fingerprint Authentication',
+            cancelButton: 'Cancel',
+          ),
+        ],
       );
-
-      if (!mounted) return;
-
-      if (authenticated) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const PinScreen(isFirstTime: false),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Fingerprint not recognized"),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Fingerprint authentication failed: $e"),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      debugPrint("Biometric error: $e");
+      return false;
     }
+  }
+
+  void _onSuccessUnlock() {
+    // Tell AppLock that the app has been unlocked
+    AppLock.of(context)!.didUnlock();
+  }
+
+  void _showLockScreen(BuildContext context) {
+    if (_savedPin == null) return;
+
+    screenLock(
+      context: context,
+      correctString: _savedPin!,
+      canCancel: false,
+      title: const Text(
+        'Enter your PIN',
+        style: TextStyle(color: Colors.white, fontSize: 22),
+      ),
+      customizedButtonChild: Icon(
+        Icons.fingerprint,
+        size: 60,
+        color: _fingerprintEnabled ? Colors.tealAccent : Colors.grey,
+      ),
+      customizedButtonTap: () async {
+        final success = await _authenticateWithBiometrics();
+        if (success && mounted) {
+          _onSuccessUnlock();
+        }
+      },
+      deleteButton: const Icon(Icons.backspace, size: 40, color: Colors.white),
+      onUnlocked: () {
+        _onSuccessUnlock();
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.lock_outline, size: 80, color: Colors.white70),
-              const SizedBox(height: 20),
-              const Text(
-                'Password Vault',
-                style: TextStyle(
-                  fontSize: 26,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 60),
-              if (_isBiometricAvailable && _fingerprintEnabled)
-                GestureDetector(
-                  onTap: _authenticateFingerprint,
-                  child: const CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.white10,
-                    child: Icon(
-                      Icons.fingerprint,
-                      size: 60,
-                      color: Colors.tealAccent,
-                    ),
-                  ),
-                ),
-              if (_isBiometricAvailable && _fingerprintEnabled)
-                const SizedBox(height: 16),
-              if (_isBiometricAvailable && _fingerprintEnabled)
-                const Text(
-                  'Touch to unlock',
-                  style: TextStyle(color: Colors.white60, fontSize: 16),
-                ),
-              const SizedBox(height: 40),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PinScreen(isFirstTime: false),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Use PIN instead',
-                  style: TextStyle(color: Colors.tealAccent, fontSize: 16),
-                ),
-              ),
-            ],
-          ),
+    if (_savedPin == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.tealAccent),
         ),
-      ),
-    );
+      );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showLockScreen(context);
+    });
+
+    return const Scaffold(backgroundColor: Colors.black);
   }
 }
