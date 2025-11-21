@@ -26,8 +26,11 @@ class _LockScreenState extends State<LockScreen> {
 
   Future<void> _loadSettings() async {
     _savedPin = await _storage.read(key: 'user_pin');
-    _fingerprintEnabled =
+    final canCheckBiometrics = await _localAuth.canCheckBiometrics;
+    final isFingerprintEnabled =
         (await _storage.read(key: 'use_fingerprint')) == 'true';
+
+    _fingerprintEnabled = canCheckBiometrics && isFingerprintEnabled;
     setState(() {});
   }
 
@@ -67,17 +70,17 @@ class _LockScreenState extends State<LockScreen> {
         'Enter your PIN',
         style: TextStyle(color: Colors.white, fontSize: 22),
       ),
-      customizedButtonChild: Icon(
-        Icons.fingerprint,
-        size: 60,
-        color: _fingerprintEnabled ? Colors.tealAccent : Colors.grey,
-      ),
-      customizedButtonTap: () async {
-        final success = await _authenticateWithBiometrics();
-        if (success && mounted) {
-          _onSuccessUnlock();
-        }
-      },
+      customizedButtonChild: _fingerprintEnabled
+          ? const Icon(Icons.fingerprint, size: 60, color: Colors.tealAccent)
+          : null,
+      customizedButtonTap: _fingerprintEnabled
+          ? () async {
+              final success = await _authenticateWithBiometrics();
+              if (success && mounted) {
+                _onSuccessUnlock();
+              }
+            }
+          : null,
       deleteButton: const Icon(Icons.backspace, size: 40, color: Colors.white),
       onUnlocked: () {
         _onSuccessUnlock();

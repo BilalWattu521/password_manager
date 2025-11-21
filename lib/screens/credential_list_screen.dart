@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_screen_lock/flutter_screen_lock.dart';
 import 'package:password_manager/services/database_helper.dart';
 import 'package:password_manager/widgets/credential_card.dart';
 import 'package:password_manager/screens/edit_credential_screen.dart';
@@ -17,93 +18,29 @@ class CredentialsListScreen extends StatefulWidget {
 class _CredentialsListScreenState extends State<CredentialsListScreen> {
   final _dbHelper = DatabaseHelper();
   final _storage = const FlutterSecureStorage();
-  String? _masterPin;
 
   @override
   void initState() {
     super.initState();
-    _loadMasterPin();
   }
 
-  Future<void> _loadMasterPin() async {
-    _masterPin = await _storage.read(key: 'user_pin');
-  }
+  void _verifyPin(VoidCallback onSuccess) async {
+    final pin = await _storage.read(key: 'user_pin');
+    if (pin == null) return;
+    if (!mounted) return;
 
-  void _showPinVerificationDialog({
-    required String title,
-    required VoidCallback onSuccess,
-  }) {
-    final pinController = TextEditingController();
-    bool isPinVisible = false;
-
-    showDialog(
+    screenLock(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          backgroundColor: Colors.grey[900],
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: Text(title, style: const TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Enter your 4-digit PIN to continue',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: pinController,
-                obscureText: !isPinVisible,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Enter PIN',
-                  hintStyle: const TextStyle(color: Colors.grey),
-                  filled: true,
-                  fillColor: Colors.grey[800],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  counterText: '',
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      isPinVisible ? Icons.visibility : Icons.visibility_off,
-                      color: Colors.teal,
-                      size: 20,
-                    ),
-                    onPressed: () =>
-                        setState(() => isPinVisible = !isPinVisible),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () {
-                if (pinController.text == _masterPin) {
-                  Navigator.pop(context);
-                  onSuccess();
-                } else {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('Invalid PIN')));
-                }
-              },
-              child: const Text('Verify', style: TextStyle(color: Colors.teal)),
-            ),
-          ],
-        ),
+      correctString: pin,
+      onUnlocked: () {
+        Navigator.pop(context);
+        onSuccess();
+      },
+      title: const Text(
+        'Verify your PIN',
+        style: TextStyle(color: Colors.white),
       ),
+      deleteButton: const Icon(Icons.backspace, size: 40, color: Colors.white),
     );
   }
 
@@ -150,22 +87,19 @@ class _CredentialsListScreenState extends State<CredentialsListScreen> {
       title: 'Edit Password',
       message: 'Are you sure you want to edit this password?',
       onConfirm: () {
-        _showPinVerificationDialog(
-          title: 'Verify PIN',
-          onSuccess: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => EditCredentialScreen(
-                  id: id,
-                  appName: appName,
-                  username: username,
-                  password: password,
-                ),
+        _verifyPin(() {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EditCredentialScreen(
+                id: id,
+                appName: appName,
+                username: username,
+                password: password,
               ),
-            ).then((_) => setState(() {}));
-          },
-        );
+            ),
+          ).then((_) => setState(() {}));
+        });
       },
     );
   }
@@ -177,18 +111,33 @@ class _CredentialsListScreenState extends State<CredentialsListScreen> {
           'Are you sure you want to delete this password? This action cannot be undone.',
       isDelete: true,
       onConfirm: () {
-        _showPinVerificationDialog(
-          title: 'Verify PIN',
-          onSuccess: () async {
-            await _dbHelper.deleteCredential(id);
+        _verifyPin(() async {
+          await _dbHelper.deleteCredential(id);
+          if (mounted) {
+            // Check if there are any remaining credentials for this app
+            final remainingCredentials = await _dbHelper.getCredentialsForApp(
+              widget.appName,
+            );
+
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Credential deleted')),
               );
-              setState(() {});
+
+              if (remainingCredentials.isEmpty) {
+                // If no credentials left, go back to Home Screen immediately but safely
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    Navigator.pop(context);
+                  }
+                });
+              } else {
+                // Otherwise, just refresh the list
+                setState(() {});
+              }
             }
-          },
-        );
+          }
+        });
       },
     );
   }

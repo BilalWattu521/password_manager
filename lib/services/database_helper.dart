@@ -24,7 +24,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE credentials (
@@ -35,6 +35,14 @@ class DatabaseHelper {
             createdAt TEXT NOT NULL
           )
         ''');
+        await db.execute('CREATE INDEX idx_app_name ON credentials (appName)');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+            'CREATE INDEX idx_app_name ON credentials (appName)',
+          );
+        }
       },
     );
   }
@@ -59,6 +67,16 @@ class DatabaseHelper {
       'SELECT DISTINCT appName FROM credentials ORDER BY appName ASC',
     );
     return result.map((row) => row['appName'] as String).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getAppsWithCounts() async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT appName, COUNT(*) as count 
+      FROM credentials 
+      GROUP BY appName 
+      ORDER BY appName ASC
+    ''');
   }
 
   Future<List<Map<String, dynamic>>> getCredentialsForApp(

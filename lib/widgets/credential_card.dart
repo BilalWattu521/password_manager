@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_screen_lock/flutter_screen_lock.dart';
 
 class CredentialCard extends StatefulWidget {
   final int id;
@@ -59,95 +60,42 @@ class _CredentialCardState extends State<CredentialCard> {
       // If biometric fails or returns false, fallback to PIN on emulator
       if (!result && mounted) {
         debugPrint("Biometric auth failed, falling back to PIN");
-        _showPinVerificationDialog();
+        _verifyPin();
       }
       return result;
     } catch (e) {
       debugPrint("Biometric error: $e, falling back to PIN");
       // On error, fallback to PIN verification
       if (mounted) {
-        _showPinVerificationDialog();
+        _verifyPin();
       }
       return false;
     }
   }
 
-  void _showPinVerificationDialog() {
-    final pinController = TextEditingController();
-    bool isPinVisible = false;
+  void _verifyPin() async {
+    if (!mounted) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          backgroundColor: Colors.grey[900],
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: const Text(
-            'Verify PIN',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Enter your master PIN to view password',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: pinController,
-                obscureText: !isPinVisible,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Enter PIN',
-                  hintStyle: const TextStyle(color: Colors.grey),
-                  filled: true,
-                  fillColor: Colors.grey[800],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  counterText: '',
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      isPinVisible ? Icons.visibility : Icons.visibility_off,
-                      color: Colors.teal,
-                      size: 20,
-                    ),
-                    onPressed: () =>
-                        setState(() => isPinVisible = !isPinVisible),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () {
-                if (pinController.text == _masterPin) {
-                  Navigator.pop(context);
-                  setState(() => _isPasswordVisible = true);
-                } else {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('Invalid PIN')));
-                }
-              },
-              child: const Text('Verify', style: TextStyle(color: Colors.teal)),
-            ),
-          ],
+    // If we have the PIN loaded
+    if (_masterPin != null) {
+      screenLock(
+        context: context,
+        correctString: _masterPin!,
+        onUnlocked: () {
+          Navigator.pop(context);
+          setState(() => _isPasswordVisible = true);
+        },
+        title: const Text(
+          'Verify your PIN',
+          style: TextStyle(color: Colors.white),
         ),
-      ),
-    );
+        deleteButton: const Icon(
+          Icons.backspace,
+          size: 40,
+          color: Colors.white,
+        ),
+      );
+    }
   }
 
   void _togglePasswordVisibility() async {
@@ -163,16 +111,11 @@ class _CredentialCardState extends State<CredentialCard> {
       final authenticated = await _authenticateWithBiometrics();
       if (authenticated) {
         setState(() => _isPasswordVisible = true);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Authentication failed')),
-          );
-        }
       }
+      // No else block needed here as _authenticateWithBiometrics handles fallback
     } else {
       // No biometric - fallback to PIN verification
-      _showPinVerificationDialog();
+      _verifyPin();
     }
   }
 

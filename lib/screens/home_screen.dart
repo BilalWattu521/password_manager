@@ -13,8 +13,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _dbHelper = DatabaseHelper();
   final _searchController = TextEditingController();
-  List<String> _allApps = [];
-  List<String> _filteredApps = [];
+  List<Map<String, dynamic>> _allApps = [];
+  List<Map<String, dynamic>> _filteredApps = [];
 
   @override
   void initState() {
@@ -30,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadApps() async {
-    final apps = await _dbHelper.getAllApps();
+    final apps = await _dbHelper.getAppsWithCounts();
     setState(() {
       _allApps = apps;
       _filteredApps = apps;
@@ -41,7 +41,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _filteredApps = _allApps
-          .where((app) => app.toLowerCase().contains(query))
+          .where(
+            (app) => (app['appName'] as String).toLowerCase().contains(query),
+          )
           .toList();
     });
   }
@@ -124,7 +126,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemCount: _filteredApps.length,
                       itemBuilder: (context, index) {
-                        final appName = _filteredApps[index];
+                        final appData = _filteredApps[index];
+                        final appName = appData['appName'] as String;
+                        final count = appData['count'] as int;
+
                         return GestureDetector(
                           onTap: () {
                             Navigator.push(
@@ -160,21 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 4),
-                                      FutureBuilder<List<Map<String, dynamic>>>(
-                                        future: _dbHelper.getCredentialsForApp(
-                                          appName,
+                                      Text(
+                                        '$count credential${count != 1 ? 's' : ''}',
+                                        style: TextStyle(
+                                          color: Colors.grey[400],
+                                          fontSize: 14,
                                         ),
-                                        builder: (context, snapshot) {
-                                          final count =
-                                              snapshot.data?.length ?? 0;
-                                          return Text(
-                                            '$count credential${count != 1 ? 's' : ''}',
-                                            style: TextStyle(
-                                              color: Colors.grey[400],
-                                              fontSize: 14,
-                                            ),
-                                          );
-                                        },
                                       ),
                                     ],
                                   ),
