@@ -109,4 +109,37 @@ class DatabaseHelper {
     final db = await database;
     return await db.delete('credentials', where: 'id = ?', whereArgs: [id]);
   }
+
+  /// Fetch every credential row for export.
+  Future<List<Map<String, dynamic>>> getAllCredentials() async {
+    final db = await database;
+    return await db.query('credentials', orderBy: 'appName ASC, createdAt ASC');
+  }
+
+  /// Batch-insert credentials from an import, skipping exact duplicates.
+  Future<void> importCredentials(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      for (final row in rows) {
+        // Avoid inserting an exact duplicate (same app + username + password)
+        final existing = await txn.query(
+          'credentials',
+          where: 'appName = ? AND username = ? AND password = ?',
+          whereArgs: [row['appName'], row['username'], row['password']],
+          limit: 1,
+        );
+        if (existing.isEmpty) {
+          await txn.insert('credentials', {
+            'appName': row['appName'],
+            'username': row['username'],
+            'password': row['password'],
+            'createdAt':
+                row['createdAt'] ?? DateTime.now().toIso8601String(),
+          });
+        }
+      }
+    });
+  }
 }
