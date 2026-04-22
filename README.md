@@ -19,9 +19,9 @@ A fully offline, secure and modern **Password Manager App** featuring biometric 
 - Reset option is hidden if the device has no enrolled biometrics
 
 ### 📦 Backup & Restore
-- **Encrypted Export** — Backs up all credentials to an AES-256 encrypted `.pmbak` file
+- **Encrypted Export** — Backs up all credentials to an AES-256 encrypted backup file
 - **Password-Protected Backup** — Every backup file is protected by a user-chosen backup password, separate from your PIN
-- **Import / Restore** — Pick a `.pmbak` file from any source (local storage, Google Drive, etc.) and decrypt it to restore credentials
+- **Import / Restore** — Pick a backup file from any source (local storage, Google Drive, etc.) and decrypt it to restore credentials
 - **Platform-Agnostic** — Backup files can be transferred between devices and cloud providers freely
 
 ### 📋 Credential Management
@@ -70,11 +70,11 @@ A fully offline, secure and modern **Password Manager App** featuring biometric 
 ```
 Export
   └─ Enter backup password
-       └─ All credentials → JSON → AES-256 encrypted → .pmbak file
-            └─ Share via any app (Drive, Files, WhatsApp, etc.)
+       └─ All credentials → JSON → AES-256 encrypted → backup file
+            └─ Share via any app (Drive, Files, etc.)
 
 Import
-  └─ Pick .pmbak file
+  └─ Pick backup file
        └─ Enter backup password
             └─ Decrypt → validate → insert credentials into local DB
 ```
