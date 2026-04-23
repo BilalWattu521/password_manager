@@ -38,10 +38,12 @@ class _CredentialCardState extends State<CredentialCard> {
   }
 
   Future<void> _checkBiometricAndLoadPin() async {
-    final canCheckBio = await _localAuth.canCheckBiometrics;
+    final available = await _localAuth.getAvailableBiometrics();
+    final isFingerprintEnabled =
+        (await _storage.read(key: 'use_fingerprint')) == 'true';
     _masterPin = await _storage.read(key: 'user_pin');
     setState(() {
-      _hasBiometric = canCheckBio;
+      _hasBiometric = available.isNotEmpty && isFingerprintEnabled;
     });
   }
 

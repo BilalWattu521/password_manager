@@ -26,11 +26,10 @@ class _LockScreenState extends State<LockScreen> {
 
   Future<void> _loadSettings() async {
     _savedPin = await _storage.read(key: 'user_pin');
-    final canCheckBiometrics = await _localAuth.canCheckBiometrics;
+    final available = await _localAuth.getAvailableBiometrics();
     final isFingerprintEnabled =
         (await _storage.read(key: 'use_fingerprint')) == 'true';
-
-    _fingerprintEnabled = canCheckBiometrics && isFingerprintEnabled;
+    _fingerprintEnabled = available.isNotEmpty && isFingerprintEnabled;
     setState(() {});
   }
 
