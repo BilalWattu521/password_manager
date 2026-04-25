@@ -99,7 +99,16 @@ class _LockScreenState extends State<LockScreen> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _showLockScreen(context);
+      if (!mounted) return;
+      _showLockScreen(context);
+      // Auto-trigger fingerprint as soon as the lock screen is visible
+      if (_fingerprintEnabled) {
+        Future.delayed(const Duration(milliseconds: 300), () async {
+          if (!mounted) return;
+          final success = await _authenticateWithBiometrics();
+          if (success && mounted) _onSuccessUnlock();
+        });
+      }
     });
 
     return const Scaffold(backgroundColor: Colors.black);
